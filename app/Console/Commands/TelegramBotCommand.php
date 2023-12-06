@@ -62,7 +62,7 @@ class TelegramBotCommand extends AbstractCommand
                         echo "\n*** UPDATE {$update->getUpdateId()} ***\n\n";
                         $updateInJson = json_encode($update->toArray(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
                         echo $updateInJson, "\n";
-                        file_put_contents('chat-history/' . $update->getUpdateId() . '.json', $updateInJson);
+                        file_put_contents(PROJECT_ROOT_DIR . '/chat-history/' . $update->getUpdateId() . '.json', $updateInJson);
                         $lastUpdateId = $update->getUpdateId();
                         /** @var Message $message */
                         $message = $update->getMessage();
