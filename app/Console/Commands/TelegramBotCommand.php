@@ -44,8 +44,8 @@ class TelegramBotCommand extends AbstractCommand
 
         $telegram = new \Telegram\Bot\Api($this->resourceManager->getConfig()->get('telegram.bot.token'));
 
-        if (file_exists('.group_last_update_id')) {
-            $lastUpdateId = json_decode(file_get_contents('.group_last_update_id'), false, 512, JSON_THROW_ON_ERROR);
+        if (file_exists(PROJECT_ROOT_DIR . '/.group_last_update_id')) {
+            $lastUpdateId = json_decode(file_get_contents(PROJECT_ROOT_DIR . '/.group_last_update_id'), false, 512, JSON_THROW_ON_ERROR);
         } else {
             $lastUpdateId = 0;
         }
@@ -143,7 +143,7 @@ class TelegramBotCommand extends AbstractCommand
                                 //]);
                             }
                         }
-                        file_put_contents('.group_last_update_id', json_encode($lastUpdateId), LOCK_EX);
+                        file_put_contents(PROJECT_ROOT_DIR . '/.group_last_update_id', json_encode($lastUpdateId), LOCK_EX);
                     }
     //                break;
                 }
