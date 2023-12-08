@@ -102,7 +102,7 @@ class SpamTestCommand extends AbstractCommand
             ->pop();
     }
 
-    public function getMessage(Collection $update): Collection
+    public function getMessage(Collection $update): ?Message
     {
         return match ($this->detectType($update)) {
             'message' => $update->message,
@@ -115,7 +115,7 @@ class SpamTestCommand extends AbstractCommand
             'shipping_query' => $update->shippingQuery,
             'pre_checkout_query' => $update->preCheckoutQuery,
             'poll' => $update->poll,
-            default => collect(),
+            default => null,
         };
     }
 

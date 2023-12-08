@@ -6,6 +6,7 @@ namespace App\Console\Commands;
 use App\Helpers\SqliteDbHelper;
 //use App\Helpers\StringHelper;
 //use App\Helpers\TelegramHelper;
+use App\Helpers\TelegramHelper;
 use App\ResourceManager;
 use App\Telegram\SpamDetector;
 use Exception;
@@ -66,7 +67,7 @@ class TelegramBotCommand extends AbstractCommand
                         $lastUpdateId = $update->getUpdateId();
                         /** @var Message $message */
                         $message = $update->getMessage();
-                        $chatId = self::convertChatId($message->chat->id, $message->chat->type);
+                        $chatId = TelegramHelper::convertChatId($message->chat->id, $message->chat->type);
 
                         if ($chatId == $didiDighomiChatId) {
                             $groupRow = [
@@ -84,8 +85,8 @@ class TelegramBotCommand extends AbstractCommand
                                     'id' => $message->messageId,
                                     'date_unixtime' => $message->date,
                                     'edited_unixtime' => $message->editDate,
-                                    'from' => self::getMessageFrom($message),
-                                    'from_id' => self::getMessageFromId($message),
+                                    'from' => TelegramHelper::getMessageFrom($message),
+                                    'from_id' => TelegramHelper::getMessageFromId($message),
                                     'username' => $message->from?->username ?? '',
                                     'text' => $message->text,
                                     'forwarded_from' => $message->forwardFromChat?->title,
@@ -97,9 +98,9 @@ class TelegramBotCommand extends AbstractCommand
                             }
 
                             $userRow = [
-                                'user_id' => self::getMessageFromId($message),
+                                'user_id' => TelegramHelper::getMessageFromId($message),
                                 'user_int_id' => $message->from?->id,
-                                'name' => self::getMessageFrom($message),
+                                'name' => TelegramHelper::getMessageFrom($message),
                                 'is_premium' => (bool) $message->from?->is_premium,
                             ];
                             if (!empty($message->new_chat_member)) {
@@ -133,7 +134,7 @@ class TelegramBotCommand extends AbstractCommand
                                 echo "Send message to bot for {$userId}\n";
                                 $telegram->sendMessage([
                                     'chat_id' => $userId,
-                                    'text' => 'Удалён спам в чате от ' . self::getMessageFromWithUsername($message) . "\n\n" . $message->text,
+                                    'text' => 'Удалён спам в чате от ' . TelegramHelper::getMessageFromWithUsername($message) . "\n\n" . $message->text,
                                 ]);
                                 if ($this->sqliteDbHelper->upsertMessage([
                                     'group_id' => $groupRow['id'],
@@ -146,7 +147,7 @@ class TelegramBotCommand extends AbstractCommand
                                 //echo "Send message to chat {$chatId}\n";
                                 //$telegram->sendMessage([
                                 //    'chat_id' => '-100' . $chatId,
-                                //    'text' => 'Удалён спам от [' . StringHelper::escapeMarkdownV2(self::getMessageFrom($message)) . '](tg://user?id='.$message->from->id.') "' . StringHelper::escapeMarkdownV2(StringHelper::trimIfTooLong(StringHelper::filterSpaces($message->text), 75)) . '"',
+                                //    'text' => 'Удалён спам от [' . StringHelper::escapeMarkdownV2(TelegramHelper::getMessageFrom($message)) . '](tg://user?id='.$message->from->id.') "' . StringHelper::escapeMarkdownV2(StringHelper::trimIfTooLong(StringHelper::filterSpaces($message->text), 75)) . '"',
                                 //    'parse_mode' => 'MarkdownV2',
                                 //]);
                             }
@@ -163,57 +164,5 @@ class TelegramBotCommand extends AbstractCommand
         }
 
         //return 0;
-    }
-
-    /**
-     * @param int $chatId
-     * @param string $chatType
-     * @return int
-     */
-    private static function convertChatId(int $chatId, string $chatType): int {
-        $chatIdStr = (string) $chatId;
-
-        if ($chatType === "supergroup" || $chatType === "channel") {
-            if (str_starts_with($chatIdStr, "-100")) {
-                $chatIdStr = substr($chatIdStr, 4);
-            }
-        }
-
-        return (int) $chatIdStr;
-    }
-
-    /**
-     * @param Message $message
-     * @return string
-     */
-    private static function getMessageFrom(Message $message): string
-    {
-        if (!empty($message->sender_chat)) {
-            return $message->sender_chat->title;
-        } else {
-            return $message->from->firstName . (!empty($message->from->lastName) ? ' ' . $message->from->lastName : '');
-        }
-    }
-
-    /**
-     * @param Message $message
-     * @return string
-     */
-    private static function getMessageFromId(Message $message): string
-    {
-        if (!empty($message->senderChat)) {
-            return 'channel' . self::convertChatId($message->senderChat->id, $message->senderChat->type);
-        } else {
-            return 'user' . $message->from?->id;
-        }
-    }
-
-    /**
-     * @param Message $message
-     * @return string
-     */
-    private static function getMessageFromWithUsername(Message $message): string
-    {
-        return self::getMessageFrom($message) . (isset($message->from->username) ? " (@{$message->from->username})" : '');
     }
 }

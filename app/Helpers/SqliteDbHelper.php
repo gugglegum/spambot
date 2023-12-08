@@ -86,51 +86,31 @@ class SqliteDbHelper
 
     public function upsertMessage(array $row): bool
     {
-        $cols = ['group_id', 'id'];
+        $cols = ['group_id', 'id', 'date_unixtime', 'edited_unixtime', '`from`', 'from_id', 'text', 'forwarded_from', 'reply_to_message_id'];
         $values = [
             $this->quote($row['group_id']),
             $this->quote($row['id']),
+            $this->quote($row['date_unixtime']),
+            $this->quoteNullable($row['edited_unixtime']),
+            $this->quoteNullable($row['from']),
+            $this->quoteNullable($row['from_id']),
+            $this->quote($row['text']),
+            $this->quoteNullable($row['forwarded_from']),
+            $this->quoteNullable($row['reply_to_message_id']),
         ];
-        $onConflict = [];
-        if (isset($row['date_unixtime'])) {
-            $cols[] = 'date_unixtime';
-            $values[] = $this->quote($row['date_unixtime']);
-            $onConflict[] = 'date_unixtime = excluded.date_unixtime';
-        }
-        if (isset($row['edited_unixtime'])) {
-            $cols[] = 'edited_unixtime';
-            $values[] = $this->quoteNullable($row['edited_unixtime']);
-            $onConflict[] = 'edited_unixtime = excluded.edited_unixtime';
-        }
-        if (isset($row['from'])) {
-            $cols[] = '`from`';
-            $values[] = $this->quoteNullable($row['from']);
-            $onConflict[] = '`from` = excluded.`from`';
-        }
-        if (isset($row['from_id'])) {
-            $cols[] = 'from_id';
-            $values[] = $this->quoteNullable($row['from_id']);
-            $onConflict[] = 'from_id = excluded.from_id';
-        }
+        $onConflict = [
+            'date_unixtime = excluded.date_unixtime',
+            'edited_unixtime = excluded.edited_unixtime',
+            '`from` = excluded.`from`',
+            'from_id = excluded.from_id',
+            'text = excluded.text',
+            'forwarded_from = excluded.forwarded_from',
+            'reply_to_message_id = excluded.reply_to_message_id',
+        ];
         if (isset($row['username'])) {
             $cols[] = 'username';
             $values[] = $this->quoteNullable($row['username']);
             $onConflict[] = 'username = excluded.username';
-        }
-        if (isset($row['text'])) {
-            $cols[] = 'text';
-            $values[] = $this->quote($row['text']);
-            $onConflict[] = 'text = excluded.text';
-        }
-        if (isset($row['forwarded_from'])) {
-            $cols[] = 'forwarded_from';
-            $values[] = $this->quoteNullable($row['forwarded_from']);
-            $onConflict[] = 'forwarded_from = excluded.forwarded_from';
-        }
-        if (isset($row['reply_to_message_id'])) {
-            $cols[] = 'reply_to_message_id';
-            $values[] = $this->quoteNullable($row['reply_to_message_id']);
-            $onConflict[] = 'reply_to_message_id = excluded.reply_to_message_id';
         }
         if (isset($row['is_spam'])) {
             $cols[] = 'is_spam';
@@ -144,6 +124,59 @@ class SqliteDbHelper
                 " . implode(', ', $onConflict)
         );
         return $lastRowId != $this->getTableMaxRowId('messages');
+    }
+
+    public function updateMessage(int $chatId, int $messageId, array $newValues): void
+    {
+        $updates = [];
+        if (isset($newValues['date_unixtime'])) {
+            $updates[] = 'date_unixtime = ' . $this->quote($newValues['date_unixtime']);
+        }
+        if (isset($newValues['edited_unixtime'])) {
+            $updates[] = 'edited_unixtime = ' . $this->quoteNullable($newValues['edited_unixtime']);
+        }
+        if (isset($newValues['from'])) {
+            $updates[] = '`from` = ' . $this->quoteNullable($newValues['from']);
+        }
+        if (isset($newValues['from_id'])) {
+            $updates[] = 'from_id = ' . $this->quoteNullable($newValues['from_id']);
+        }
+        if (isset($newValues['username'])) {
+            $updates[] = 'username = ' . $this->quoteNullable($newValues['username']);
+        }
+        if (isset($newValues['text'])) {
+            $updates[] = 'text = ' . $this->quote($newValues['text']);
+        }
+        if (isset($newValues['forwarded_from'])) {
+            $updates[] = 'forwarded_from = ' . $this->quoteNullable($newValues['forwarded_from']);
+        }
+        if (isset($newValues['reply_to_message_id'])) {
+            $updates[] = 'reply_to_message_id = ' . $this->quoteNullable($newValues['reply_to_message_id']);
+        }
+        if (isset($newValues['is_spam'])) {
+            $updates[] = 'is_spam = ' . $this->quote($newValues['is_spam']);
+        }
+
+        $stmt = $this->pdo->prepare("UPDATE messages SET
+            " . implode(', ', $updates) . "        
+            WHERE `group_id` = :group_id AND `id` = :message_id"
+        );
+        $stmt->execute([
+            'group_id' => $chatId,
+            'message_id' => $messageId,
+        ]);
+    }
+
+    public function isMessageExists(int $chatId, int $messageId): bool
+    {
+        $stmt = $this->pdo->prepare("SELECT COUNT(*) `count` FROM `messages` WHERE `group_id` = :group_id AND `id` = :message_id");
+        $stmt->execute([
+            'group_id' => $chatId,
+            'message_id' => $messageId,
+        ]);
+        $count = $stmt->fetchColumn();
+        $stmt->closeCursor();
+        return $count != 0;
     }
 
     public function upsertUser(array $row): bool
