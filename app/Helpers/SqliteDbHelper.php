@@ -86,33 +86,56 @@ class SqliteDbHelper
 
     public function upsertMessage(array $row): bool
     {
-        $cols = ['group_id', 'id', 'date_unixtime', 'edited_unixtime', '`from`', 'from_id', 'text', 'forwarded_from', 'reply_to_message_id'];
+        $cols = ['group_id', 'id'];
         $values = [
             $this->quote($row['group_id']),
             $this->quote($row['id']),
-            $this->quote($row['date_unixtime']),
-            $this->quoteNullable($row['edited_unixtime']),
-            $this->quoteNullable($row['from']),
-            $this->quoteNullable($row['from_id']),
-            $this->quote($row['text']),
-            $this->quoteNullable($row['forwarded_from']),
-            $this->quoteNullable($row['reply_to_message_id']),
         ];
-        $onConflict = [
-            'group_id = excluded.group_id',      // Probably not needed
-            'id = excluded.id',                  // Probably not needed
-            'date_unixtime = excluded.date_unixtime',
-            'edited_unixtime = excluded.edited_unixtime',
-            '`from` = excluded.`from`',
-            'from_id = excluded.from_id',
-            'text = excluded.text',
-            'forwarded_from = excluded.forwarded_from',
-            'reply_to_message_id = excluded.reply_to_message_id',
-        ];
+        $onConflict = [];
+        if (isset($row['date_unixtime'])) {
+            $cols[] = 'date_unixtime';
+            $values[] = $this->quote($row['date_unixtime']);
+            $onConflict[] = 'date_unixtime = excluded.date_unixtime';
+        }
+        if (isset($row['edited_unixtime'])) {
+            $cols[] = 'edited_unixtime';
+            $values[] = $this->quoteNullable($row['edited_unixtime']);
+            $onConflict[] = 'edited_unixtime = excluded.edited_unixtime';
+        }
+        if (isset($row['from'])) {
+            $cols[] = '`from`';
+            $values[] = $this->quoteNullable($row['from']);
+            $onConflict[] = '`from` = excluded.`from`';
+        }
+        if (isset($row['from_id'])) {
+            $cols[] = 'from_id';
+            $values[] = $this->quoteNullable($row['from_id']);
+            $onConflict[] = 'from_id = excluded.from_id';
+        }
         if (isset($row['username'])) {
             $cols[] = 'username';
             $values[] = $this->quoteNullable($row['username']);
             $onConflict[] = 'username = excluded.username';
+        }
+        if (isset($row['text'])) {
+            $cols[] = 'text';
+            $values[] = $this->quote($row['text']);
+            $onConflict[] = 'text = excluded.text';
+        }
+        if (isset($row['forwarded_from'])) {
+            $cols[] = 'forwarded_from';
+            $values[] = $this->quoteNullable($row['forwarded_from']);
+            $onConflict[] = 'forwarded_from = excluded.forwarded_from';
+        }
+        if (isset($row['reply_to_message_id'])) {
+            $cols[] = 'reply_to_message_id';
+            $values[] = $this->quoteNullable($row['reply_to_message_id']);
+            $onConflict[] = 'reply_to_message_id = excluded.reply_to_message_id';
+        }
+        if (isset($row['is_spam'])) {
+            $cols[] = 'is_spam';
+            $values[] = $this->quote($row['is_spam']);
+            $onConflict[] = 'is_spam = excluded.is_spam';
         }
         $lastRowId = $this->getTableMaxRowId('messages');
         $this->pdo->exec("INSERT INTO messages (" . implode(', ', $cols) . ") VALUES (

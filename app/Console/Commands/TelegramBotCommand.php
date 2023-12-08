@@ -135,6 +135,14 @@ class TelegramBotCommand extends AbstractCommand
                                     'chat_id' => $userId,
                                     'text' => 'Удалён спам в чате от ' . self::getMessageFromWithUsername($message) . "\n\n" . $message->text,
                                 ]);
+                                if ($this->sqliteDbHelper->upsertMessage([
+                                    'group_id' => $groupRow['id'],
+                                    'id' => $message->messageId,
+                                    'is_spam' => 1,
+                                ])) {
+                                    echo "Marked message as spam\n";
+                                }
+
                                 //echo "Send message to chat {$chatId}\n";
                                 //$telegram->sendMessage([
                                 //    'chat_id' => '-100' . $chatId,
