@@ -7,7 +7,8 @@ use Telegram\Bot\Objects\Message;
 
 class TelegramHelper
 {
-    public static function convertChatId(int $chatId, string $chatType): int {
+    public static function convertChatId(int $chatId, string $chatType): int
+    {
         $chatIdStr = (string) $chatId;
 
         if ($chatType === "supergroup" || $chatType === "channel") {
@@ -17,6 +18,21 @@ class TelegramHelper
         }
 
         return (int) $chatIdStr;
+    }
+
+    /**
+     * Converts a string user ID like "user12345678" to integer 12345678
+     *
+     * @param string $userId
+     * @return ?int
+     */
+    public static function userIdToInt(string $userId): ?int
+    {
+        if (preg_match('/^user(\d+)$/', $userId, $m)) {
+            return (int) $m[1];
+        } else {
+            return null;
+        }
     }
 
     /**

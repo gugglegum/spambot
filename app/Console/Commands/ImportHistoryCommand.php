@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Helpers\SqliteDbHelper;
+use App\Helpers\TelegramHelper;
 use App\ResourceManager;
 use Exception;
 use JetBrains\PhpStorm\Pure;
@@ -64,7 +65,7 @@ class ImportHistoryCommand extends AbstractCommand
 
                 $userRow = [
                     'user_id' => $message['from_id'],
-                    'user_int_id' => self::userIdToInt($message['from_id']),
+                    'user_int_id' => TelegramHelper::userIdToInt($message['from_id']),
                     'name' => $message['from'],
                 ];
                 if (!empty($message['reply_to_message_id'])) {
@@ -75,7 +76,7 @@ class ImportHistoryCommand extends AbstractCommand
                 if ($message['action'] == 'invite_members') {
                     $userRow = [
                         'user_id' => $message['actor_id'],
-                        'user_int_id' => self::userIdToInt($message['actor_id']),
+                        'user_int_id' => TelegramHelper::userIdToInt($message['actor_id']),
                         'name' => $message['actor'],
                     ];
                     if (count($message['members']) == 1 && $message['members'][0] == $message['actor']) {
@@ -92,19 +93,6 @@ class ImportHistoryCommand extends AbstractCommand
         echo "Messages added: {$messagesAddedCounter}\n";
 
         return 0;
-    }
-
-    /**
-     * @param string $userId
-     * @return ?int
-     */
-    private static function userIdToInt(string $userId): ?int
-    {
-        if (preg_match('/^user(\d+)$/', $userId, $m)) {
-            return (int) $m[1];
-        } else {
-            return null;
-        }
     }
 
     private static function messageTextEntitiesToText(array $entities): string

@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Helpers\SqliteDbHelper;
+use App\Helpers\TelegramHelper;
 use App\ResourceManager;
 use App\Telegram\SpamDetector;
 use App\Telegram\SpamDetectorBadWordsStat;
@@ -41,49 +42,43 @@ class SpamTestCommand extends AbstractCommand
 
     public function __invoke(): ?int
     {
-//        $updateId = 801812061;
-        $updateId = 801812089;
-
         $badWordsStat = new SpamDetectorBadWordsStat();
-        $skipUpdates = [801812076]; // skip updates with expected false-positives
+        //$skipUpdates = [801812076]; // skip updates with expected false-positives
 
-        $files = glob('chat-history/*.json');
-        foreach ($files as $updateFile) {
-            echo "\n{$updateFile}\n";
-
-            $shouldBeSpam = str_contains($updateFile, 'spam');
-
-//            $update = new Message(json_decode(file_get_contents(self::getUpdateFile($updateId)), true, 512, JSON_THROW_ON_ERROR));
-            $update = new Message(json_decode(file_get_contents($updateFile), true, 512, JSON_THROW_ON_ERROR));
-
-            $message = $this->getMessage($update);
-            if (!isset($message->text)) {
-                continue;
-            }
-            echo $message->text . "\n";
-//            var_dump($message->toArray());
-            if (in_array($update->update_id, $skipUpdates)) {
-                continue;
-            }
+        $didiDighomiChatId = 1677720183;
+        $stmt = $this->pdo->prepare("SELECT * FROM `messages` WHERE `group_id` = :group_id ORDER BY id");
+        $stmt->execute([
+            'group_id' => $didiDighomiChatId,
+        ]);
+        foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) as $messageRow) {
+//            if ($messageRow['id'] != 27667) {
+//                continue;
+//            }
+            $message = $this->getMessage($messageRow);
+            echo "\nMsgID: {$message->messageId}\nDate: " . date('Y-m-d H:i:s', $message->date) . "\nFrom: " . TelegramHelper::getMessageFromWithUsername($message). "\n";
+            echo "---------------------\n" . $message->text . "\n---------------------\n";
+//            if (in_array($update->update_id, $skipUpdates)) {
+//                continue;
+//            }
 
             $spamDetector = new SpamDetector($this->pdo, $message, $badWordsStat);
             $spamDetector->rate();
-//            echo "Messages count from this user: " . $spamDetector->messagesCountFromUser . "\n";
-//            echo "Days from first message: " . ($spamDetector->dateOfFirstUserMessage ? round((time() - $spamDetector->dateOfFirstUserMessage) / 3600 / 24) : 'N/A') . "\n";
             echo "Total rate: " . $spamDetector->rate . "\n";
+            echo "Messages from this user: " . $spamDetector->messagesCountFromUser . "\n";
+            echo "Days since first message: " . ($spamDetector->daysSinceFirstMessage !== null ? round($spamDetector->daysSinceFirstMessage, 2) : 'N/A') . "\n";
             $isSpamDetected = $spamDetector->rate < 0;
 
-            if ($isSpamDetected != $shouldBeSpam) {
+            if ($isSpamDetected != (bool) $messageRow['is_spam']) {
                 echo "ERROR: ";
                 if ($isSpamDetected) {
-                    echo "spam detected in {$updateFile}, but shouldn't be spam\n";
+                    echo "spam detected in MsgID: {$message->messageId}, but shouldn't be spam\n";
                 } else {
-                    echo "spam not detected in {$updateFile}, but should be spam\n";
+                    echo "spam not detected in MsgID: {$message->messageId}, but should be spam\n";
                 }
             }
         }
+        $stmt->closeCursor();
 
-//        echo json_encode($badWordsStat->stat, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_LINE_TERMINATORS | JSON_THROW_ON_ERROR);
         if (isset($badWordsStat->stat)) {
             arsort($badWordsStat->stat);
             print_r($badWordsStat->stat);
@@ -92,42 +87,49 @@ class SpamTestCommand extends AbstractCommand
         return 0;
     }
 
-    /**
-     * Detect type based on properties.
-     */
-    public function detectType(Collection $update): ?string
+    private function getMessage(array $row): Message
     {
-        return $update->keys()
-            ->intersect(static::TYPES)
-            ->pop();
+        return new Message([
+            'message_id' => (int) $row['id'],
+            'from' => [
+                'id' => TelegramHelper::userIdToInt($row['from_id']) ?? 1087968824, // by default @GroupAnonymousBot
+                'first_name' => $row['from'],
+                'username' => $row['username'],
+            ],
+            'chat' => [
+                'id' => (int) ('-100' . $row['group_id']),
+                'type' => 'supergroup',
+            ],
+            'date' => (int) $row['date_unixtime'],
+            'text' => $row['text'],
+        ]);
     }
 
-    public function getMessage(Collection $update): ?Message
-    {
-        return match ($this->detectType($update)) {
-            'message' => $update->message,
-            'edited_message' => $update->editedMessage,
-            'channel_post' => $update->channelPost,
-            'edited_channel_post' => $update->editedChannelPost,
-            'inline_query' => $update->inlineQuery,
-            'chosen_inline_result' => $update->chosenInlineResult,
-            'callback_query' => $update->callbackQuery->has('message') ? $update->callbackQuery->message : collect(),
-            'shipping_query' => $update->shippingQuery,
-            'pre_checkout_query' => $update->preCheckoutQuery,
-            'poll' => $update->poll,
-            default => null,
-        };
-    }
+//    /**
+//     * Detect type based on properties.
+//     */
+//    public function detectType(Collection $update): ?string
+//    {
+//        return $update->keys()
+//            ->intersect(static::TYPES)
+//            ->pop();
+//    }
 
-    private function getUpdateFile(int $updateId): string
-    {
-        if (file_exists('chat-history/' . $updateId . '.json')) {
-            return 'chat-history/' . $updateId . '.json';
-        } elseif (file_exists('chat-history/' . $updateId . '.spam.json')) {
-            return 'chat-history/' . $updateId . '.spam.json';
-        } else {
-            throw new \Exception("Missing update file for update_id = {$updateId}");
-        }
-    }
+//    public function getMessage(Collection $update): ?Message
+//    {
+//        return match ($this->detectType($update)) {
+//            'message' => $update->message,
+//            'edited_message' => $update->editedMessage,
+//            'channel_post' => $update->channelPost,
+//            'edited_channel_post' => $update->editedChannelPost,
+//            'inline_query' => $update->inlineQuery,
+//            'chosen_inline_result' => $update->chosenInlineResult,
+//            'callback_query' => $update->callbackQuery->has('message') ? $update->callbackQuery->message : collect(),
+//            'shipping_query' => $update->shippingQuery,
+//            'pre_checkout_query' => $update->preCheckoutQuery,
+//            'poll' => $update->poll,
+//            default => null,
+//        };
+//    }
 
 }
