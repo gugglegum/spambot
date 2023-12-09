@@ -3,12 +3,12 @@
 namespace App\Telegram;
 
 use App\Helpers\TelegramHelper;
-use Illuminate\Support\Collection;
+use Telegram\Bot\Objects\Message;
 
 class SpamDetector
 {
     private \Aura\Sql\ExtendedPdo $pdo;
-    private Collection $message;
+    private Message $message;
 
     /** @var float Big positive values for good messages from trusted senders, small or negative values for bad messages from untrusted senders */
     public float $rate = 0.0;
@@ -18,7 +18,7 @@ class SpamDetector
 
     public SpamDetectorBadWordsStat $badWordStat;
 
-    public function __construct(\Aura\Sql\ExtendedPdo $pdo, Collection $message, SpamDetectorBadWordsStat $badWordStat = null)
+    public function __construct(\Aura\Sql\ExtendedPdo $pdo, Message $message, SpamDetectorBadWordsStat $badWordStat = null)
     {
         $this->pdo = $pdo;
         $this->message = $message;
@@ -32,9 +32,9 @@ class SpamDetector
         $chatId = TelegramHelper::convertChatId($this->message->chat->id, $this->message->chat->type);
         $messageFromId = TelegramHelper::getMessageFromId($this->message);
 
-        $this->messagesCountFromUser = $this->getMessagesCountFromUser($messageFromId, $chatId);
+        $this->messagesCountFromUser = $this->getMessagesCountFromUser($messageFromId, $chatId, $this->message->messageId);
         $this->dateOfFirstUserMessage = $this->getDateOfFirstUserMessage($messageFromId, $chatId);
-        $this->daysSinceFirstMessage = $this->dateOfFirstUserMessage ? (time() - $this->dateOfFirstUserMessage) / 3600 / 24 : null;
+        $this->daysSinceFirstMessage = $this->dateOfFirstUserMessage ? ($this->message->date - $this->dateOfFirstUserMessage) / 3600 / 24 : null;
 
 //        $this->rateMessagesCount();
 //        $this->rateDateOfFirstUserMessage();
@@ -78,10 +78,12 @@ class SpamDetector
             ['(ищ(у|ем)|нужны|набор|набираем) партнер(ы|ов)', -10],
             ['(набор|нужны|набираю|набираем)( (люди|людей))?( новую)?( в)? команду', -10],
             ['(людей|человека)(( к)? себе)? в команду', -10],
+            ['(нуж(ны|ен|о)|ищ(у|ем)) \d+ человека?', -10],
             ['люд(и|ей) для заработка', -10],
             ['набираю команду партнеров', -10],
+            ['к нашей команде', -10],
             ['ищу людей в сферу крипты', -10],
-            ['ищем сотрудников для удаленного заработка', -10],
+            ['ищ(у|ем) сотрудник(ов|а)', -10],
             ['требуются люди', -10],
             ['нужны люди', -10],
             ['набираем людей на сотрудничество', -10],
@@ -89,18 +91,20 @@ class SpamDetector
             ['в( новом)? направлении P2P', -10],
             ['обучение с нуля', -10],
             ['(бесплатно(е)?|есть|всему) обуч(им|аем|ение)', -10],
-            ['обуч(им|аем|ение) бесплатно(е)?', -10],
+            ['обуч(им|аем|ение)( полностью| абсолютно| совершенно)? бесплатно(е)?', -10],
             ['удаленн(ая|ую) (подработк(а|у)|работ(а|у))', -10],
             ['(работа|занятость) удаленная', -10],
-            ['удаленного заработка', -10],
+            ['удаленн(ого|ый) заработ(ка|ок)', -10],
             ['есть подработка', -10],
             ['подработка дистанционно', -10],
-            ['(от|до) \d{2,6}\s?(\$|USDT?|долларов|руб(лей)?) в (нед|неделю|д|день|сут|сутки|мес|месяц)', -10],
-            ['(от|до) \$\d{2,6} в (нед|неделю|д|день|сут|сутки|мес|месяц)', -10],
-            ['в (нед|неделю|д|день|сут|сутки|мес|месяц) (от|до) \d{2,6}\s?(\$|USDT?|долларов|руб(лей)?)', -10],
-            ['в (нед|неделю|д|день|сут|сутки|мес|месяц) (от|до) \$\d{2,6}', -10],
-            ['\d{2,6}\s?(\$|USDT?|долларов|руб(лей)?)? \d{2,6}\s?(\$|USDT?|долларов|руб(лей)?) в (нед|неделю|д|день|сут|сутки|мес|месяц)', -10],
-            ['\$?\d{2,6} \$\d{2,6} в (нед|неделю|д|день|сут|сутки|мес|месяц)', -10],
+            ['(от|до) \d{2,6}\s?(\$|USDT?|EUR|долларов|руб(лей)?)( в)? (нед|неделю|д|день|сут|сутки|мес|месяц)', -10],
+            ['(от|до) \$\s?\d{2,6}( в)? (нед|неделю|д|день|сут|сутки|мес|месяц)', -10],
+            ['в (нед|неделю|д|день|сут|сутки|мес|месяц) (от|до) \d{2,6}\s?(\$|USDT?|EUR|долларов|руб(лей)?)', -10],
+            ['в (нед|неделю|д|день|сут|сутки|мес|месяц) (от|до) \$\s?\d{2,6}', -10],
+            ['\d{2,6}\s?(\$|USDT?|EUR|долларов|руб(лей)?)? \d{2,6}\s?(\$|USDT?|EUR|долларов|руб(лей)?) в (нед|неделю|д|день|сут|сутки|мес|месяц)', -10],
+            ['\$?\d{2,6} \$\s?\d{2,6} в (нед|неделю|д|день|сут|сутки|мес|месяц)', -10],
+            ['оплата \d{2,6}\s?(\$|USDT?|EUR|долларов|руб(лей)?)', -10],
+            ['оплата \$\s?\d{2,6}', -10],
             ['интересна крипта', -10],
             ['места ограничены', -10],
             ['в (сфере|направлении) (удаленного заработка|крипты|криптовалют(ы)?|crypto|цифровых (валют|активов))', -10],
@@ -114,12 +118,15 @@ class SpamDetector
             ['дополнительный доход', -10],
             ['(возраст|только) \d{2}\+', -10],
             ['(от|с) \d{2} лет', -10],
+            ['любой возраст', -10],
             ['(легкое?|можно|не\s?сложно|возможность) совмещ(ать|ается|ение)', -10],
             ['онлайн заработ(ок|ка)', -10],
             ['возможность работать с телефона', -10],
             ['доход(ом)? от', -10],
             ['с ежедневным доходом', -10],
+            ['доход в среднем', -10],
             ['заработок от', -10],
+            ['заработок на', -10],
             ['часа в день', -10],
             ['для расширения команды', -10],
             ['берём без опыта', -10],
@@ -139,7 +146,10 @@ class SpamDetector
             ['нет опыта не страшно', -10],
             ['мы всему научим', -10],
             ['(за полной информацией|заинтересованным|для деталей|пиши мне|пишите|не стесняемся|кому интересно) \+ в (лс|личку|личные)', -10],
-            ['Пиши \+', -10],
+            ['пиши(те)? \+', -10],
+            ['(на)?пишите в личные сообщени(е|я) \+', -10],
+            ['(на)?пишите \+ в личные сообщени(е|я)', -10],
+            ['кому интересно \+', -10],
             ['(занятость|займет|занимает|нужно всего) [^\s]+( [^\s]+)?( [^\s]+)? часа', -10],
             ['свободных [^\s]+( [^\s]+)?( [^\s]+)? часа в день', -10],
             ['(до|от) [^\s]+( [^\s]+)?( [^\s]+)? час(у|а|ов) в день', -10],
@@ -175,9 +185,10 @@ class SpamDetector
             ['хорошо заработать', -10],
             ['зависит от скорости работы', -10],
             ['все легально без предоплат', -10],
-            ['удаленная занятость в новом направлении', -10],
+            ['удаленная занятость', -10],
+            ['в новом направлении', -10],
             ['без предоплат', -10],
-            ['без вложений', -10],
+            ['без вложени(й|я)', -10],
             ['с вложениями', -10],
             ['новое прибыльное направление', -10],
             ['есть тема белая', -10],
@@ -193,13 +204,43 @@ class SpamDetector
             ['всему науч(у|им) на обучении', -10],
             ['чист(ая|ой) прибыл(ь|и)', -10],
             ['каждый сможет справиться с работой', -10],
-            ['быть всегда на связи', -10],
+            ['(быть|будь)( всегда)? на связи', -10],
             ['готов зарабатывать уже сейчас', -10],
             ['пару часов свободного времени', -10],
             ['желание зарабатывать', -10],
             ['устройство с доступом в интернет', -10],
             ['интересное направление работы', -10],
             ['постоянная онлайн поддержка', -10],
+            ['предлагаем сотрудничество', -10],
+            ['на взаимовыгодных условиях', -10],
+            ['если интересно, расскажу по подробнее', -10],
+            ['связк(а|у|и|ок)', -10],
+            ['кри5т(а|е)', -10],
+            ['самое новое направление', -10],
+            ['уникальная возможность', -10],
+            ['опытн(ой|ая|ую) команд(е|а|у)', -10],
+            ['все необходимые инструменты', -10],
+            ['для успеха в этой области', -10],
+            ['доход достигает', -10],
+            ['с одного оборота', -10],
+            ['лишь процент от', -10],
+            ['потенциальных заработков', -10],
+            ['новые горизонты успеха', -10],
+            ['предоставляем все условия', -10],
+            ['график обсуждается', -10],
+            ['приятный доход', -10],
+            ['твои друзья следят за ростом биткоина', -10],
+            ['уже зарабатывают', -10],
+            ['а ты все еще', -10],
+            ['от (зарплаты|аванса) до (зарплаты|аванса)', -10],
+            ['амбициозн(ый|ого|ых) (человека?|людей)', -10],
+            ['нов(ой|ая) сфер(ы|а) деятельности', -10],
+            ['предпринимательск(ие|ий|ого) талант(ы|а|)', -10],
+            ['твою империю', -10],
+            ['немного свободного времени', -10],
+            ['собственн(ого|ый) бизнес(а|)', -10],
+            ['превратить мечты в реальность', -10],
+//            ['', -10],
 //            ['', -10],
 //            ['', -10],
 //            ['', -10],
@@ -234,16 +275,21 @@ class SpamDetector
         foreach ($words as $word) {
             $hasRussian = false;
             $hasEnglish = false;
-            if (preg_match('/[а-я]/ui', $word)) { // has Russia
+            $hasSpecial = false;
+            if (preg_match('/[а-я]/ui', $word)) { // has Russian
                 $hasRussian = true;
             }
             if (preg_match('/[a-z]/ui', $word)) { // has English
                 $hasEnglish = true;
             }
-            if ($hasRussian && $hasEnglish) {
-                if (preg_match('/^[a-z]{2,}[а-я]+$/ui', $word)) { // exclude words like "IDшник"
-                    continue;
-                }
+            if (preg_match('/[ḁɑοȯ]/ui', $word)) { // has Umlaut
+                $hasSpecial = true;
+            }
+            // var_dump($word, $hasRussian, $hasEnglish, $hasSpecial);
+            if ($hasRussian && $hasEnglish && preg_match('/^[a-z]{2,}[а-я]+$/ui', $word)) { // exclude words like "IDшник"
+                continue;
+            }
+            if (($hasRussian && $hasEnglish) || ($hasRussian && $hasSpecial) || ($hasEnglish && $hasSpecial)) {
                 $rate -= 1;
                 echo "\tMixed letters in \"{$word}\"\n";
             }
@@ -274,7 +320,8 @@ class SpamDetector
             return false;
         }
 
-
+//        var_dump(implode(' ', $words));
+//        var_dump('/(?:^|\s)' . self::enrichRegExp(implode(' ', $wordsSequence)) . '(?:$|\s)/u');
         return (bool) preg_match('/(?:^|\s)' . self::enrichRegExp(implode(' ', $wordsSequence)) . '(?:$|\s)/u', implode(' ', $words));
 //        $j = 0;
 //        for ($i = 0; $i < count($words); $i++) {
@@ -294,7 +341,7 @@ class SpamDetector
     private static function enrichRegExp(string $regexp): string
     {
         $enriches = [
-            'а' => '(а|a|4)',
+            'а' => '(а|a|4|ḁ|ɑ)',
             'б' => '(б|6)',
             'в' => '(в|b)',
             'г' => '(г|r)',
@@ -304,7 +351,7 @@ class SpamDetector
             'и' => '(и|u)',
             'к' => '(к|k)',
             'м' => '(м|m)',
-            'о' => '(о|o|0)',
+            'о' => '(о|o|0|ο|ȯ)',
             'р' => '(р|p)',
             'с' => '(с|c)',
             'т' => '(т|t)',
@@ -337,12 +384,13 @@ class SpamDetector
         return $words;
     }
 
-    private function getMessagesCountFromUser(string $fromId, int $chatId): int
+    private function getMessagesCountFromUser(string $fromId, int $chatId, int $beforeMessageId): int
     {
-        $stmt = $this->pdo->prepare("SELECT COUNT(*) `count` FROM `messages` WHERE `group_id` = :group_id AND `from_id` = :from_id");
+        $stmt = $this->pdo->prepare("SELECT COUNT(*) `count` FROM `messages` WHERE `group_id` = :group_id AND `from_id` = :from_id AND id < :message_id");
         $stmt->execute([
             'group_id' => $chatId,
             'from_id' => $fromId,
+            'message_id' => $beforeMessageId,
         ]);
         $count = $stmt->fetchColumn();
         $stmt->closeCursor();
@@ -351,7 +399,7 @@ class SpamDetector
 
     private function getDateOfFirstUserMessage(string $fromId, int $chatId): ?int
     {
-        $stmt = $this->pdo->prepare("SELECT `date_unixtime` FROM `messages` WHERE `group_id` = :group_id AND `from_id` = :from_id ORDER BY `date_unixtime`");
+        $stmt = $this->pdo->prepare("SELECT `date_unixtime` FROM `messages` WHERE `group_id` = :group_id AND `from_id` = :from_id ORDER BY `id` LIMIT 1");
         $stmt->execute([
             'group_id' => $chatId,
             'from_id' => $fromId,
@@ -371,7 +419,8 @@ class SpamDetector
 
     private static function extractWords(string $text): array
     {
-        preg_match_all('/[а-яёa-z$0-9+]+/ui', $text, $m);
+//        preg_match_all('/[а-яёa-z$0-9+]+/ui', $text, $m);
+        preg_match_all('/((?>\pL\pM*)|[0-9$+])+/u', $text, $m);
         return $m[0];
 //        var_dump($m[0]);die;
 //        $words = preg_split('/[\s.,()!@#$%^&*\[\]"\'\\\\\/]+/ui', $text, -1, PREG_SPLIT_NO_EMPTY);
